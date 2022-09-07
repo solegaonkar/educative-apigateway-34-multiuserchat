@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  DeployId:
+    Type: String
+    Default: afsf34sfdg
+  SourceCodeBucket:
+    Type: String
+    Default: afsf34sfdg
+Resources:
+  WsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: WebSocketConnections
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: context
+          AttributeType: S
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: context
+        - KeyType: RANGE
+          AttributeName: id
+  EchoLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt ExecutionRole.Arn
+      FunctionName: EducativeEcho
+      Code:
+        S3Bucket:
+          Ref: SourceCodeBucket
+        S3Key: !Sub "${DeployId}.zip"
+      Runtime: nodejs16.x
+      Timeout: 3
+      MemorySize: 128
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EducativeLambdaRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:*
+        - PolicyName: lambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EducativeEcho"
+        - PolicyName: websocket
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - execute-api:ManageConnections
+                Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*"
+        - PolicyName: db
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt WsTable.Arn
+
+  EducativeWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: EducativeWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt ExecutionRole.Arn
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EducativeEcho/invocations"
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      RouteKey: "$connect"
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref ConnectIntegration
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt ExecutionRole.Arn
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EducativeEcho/invocations"
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      RouteKey: "$disconnect"
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref DisconnectIntegration
+
+  DefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt ExecutionRole.Arn
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:EducativeEcho/invocations"
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      RouteKey: "$default"
+      AuthorizationType: NONE
+      OperationName: DefaultRoute
+      Target: !Join
+        - "/"
+        - - "integrations"
+          - !Ref DefaultIntegration
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - DefaultRoute
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref EducativeWebSocket
+      AccessLogSettings:
+        DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:ApiGatewayLogs"
+        Format: '{ "requestId":"$context.requestId", "ip": "$context.identity.sourceIp", "caller":"$context.identity.caller", "user":"$context.identity.user","requestTime":"$context.requestTime", "eventType":"$context.eventType","routeKey":"$context.routeKey", "status":"$context.status","connectionId":"$context.connectionId" }'
+      StageName: v1
+      AutoDeploy: true
+      DefaultRouteSettings:
+        DetailedMetricsEnabled: true
+        LoggingLevel: INFO
