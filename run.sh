@@ -74,7 +74,7 @@ echo $url
 # -----------------------------------------------------------------
 # Install wscat to test the websockets
 # -----------------------------------------------------------------
-#npm install -g wscat
+npm install -g wscat
 
 # -----------------------------------------------------------------
 # Invoke the URL to test the response
