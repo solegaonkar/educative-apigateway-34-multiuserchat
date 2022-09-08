@@ -72,15 +72,8 @@ url="wss://${apiId}.execute-api.us-east-1.amazonaws.com/v1"
 echo $url
 
 # -----------------------------------------------------------------
-# Install wscat to test the websockets
-# -----------------------------------------------------------------
-npm install -g wscat
-
-# -----------------------------------------------------------------
-# Invoke the URL to test the response
-#
-# The two commands below can open two websocket connections.
-# Type one here, and other in the terminal below. You can see live chat in action.
+# The two commands below can open two websocket connections for a chat
+# Run them on your machine as detailed below
 # -----------------------------------------------------------------
 
 echo "wscat -H msgfrom:Tom -H msgto:Jerry -c $url"
