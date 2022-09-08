@@ -1,20 +1,3 @@
-/*
- * File: index.js                                                              *
- * Project: educative-apigateway-34-multiuserchat                              *
- * Created Date: 04 Sep 2022                                                   *
- * Author: Vikas K Solegaonkar (vikas@crystalcloudsolutions.com)               *
- * Copyright (c) 2022 Vikas K Solegaonkar                                      *
- * Crystal Cloud Solutions (https://crystalcloudsolutions.com)                 *
- *                                                                             *
- * Last Modified: Thu Sep 08 2022                                              *
- * Modified By: Vikas K Solegaonkar                                            *
- *                                                                             *
- * HISTORY:                                                                    *
- * ----------	---	---------------------------------------------------------    *
- * Date      	By	Comments                                                     *
- * ----------	---	---------------------------------------------------------    *
- */
-
 const AWS = require("aws-sdk");
 const ddb = new AWS.DynamoDB.DocumentClient();
 
